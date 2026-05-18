@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+requests
+beautifulsoup4
+lxml
+python-dotenv
+google-generativeai>=0.8.6
+websockets>=12.0

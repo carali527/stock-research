@@ -1,0 +1,36 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Env files / secrets
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
+# Python
+**/venv/
+**/.venv/
+**/gemini-env/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+.python-version
+
+# Node / Vite
+**/node_modules/
+**/dist/
+**/.vite/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
