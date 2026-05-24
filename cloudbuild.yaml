@@ -3,6 +3,9 @@ substitutions:
   _SERVICE: stock-research
   _REPO: stock-research
 
+options:
+  logging: CLOUD_LOGGING_ONLY
+
 steps:
   - name: gcr.io/cloud-builders/docker
     args:
