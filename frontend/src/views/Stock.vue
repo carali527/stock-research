@@ -101,8 +101,11 @@ function goPrice(stockId: string) {
           <VirtualStockInfoList class="h-full min-h-0" :rows="listRows" :visible-rows="20" @select="goPrice" />
         </div>
       </div>
-      <div v-else class="text-sm text-slate-500 dark:text-slate-400">
+      <div v-else-if="loading" class="text-sm text-slate-500 dark:text-slate-400">
         Loading…
+      </div>
+      <div v-else class="text-sm text-slate-500 dark:text-slate-400">
+        暫時沒有可顯示的股票資料。
       </div>
     </section>
   </main>

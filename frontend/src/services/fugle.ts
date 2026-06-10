@@ -77,8 +77,8 @@ let listCache: { rows: TaiwanStockListItem[]; fetchedAt: number; dateKey: string
 const LIST_TTL_MS = 60_000
 
 /**
- * 股票總覽：只呼叫一次 Fugle intraday tickers，query 帶 `type=EQUITY`、`exchange=TWSE`、`date=當日（台北）`。
- * 開發時網址形如 `.../tickers?type=EQUITY&exchange=TWSE&date=YYYY-MM-DD`（同源 + Vite proxy）。
+ * 股票總覽：只呼叫一次 Fugle intraday tickers，query 帶 `type=EQUITY` 與 `exchange=TWSE`。
+ * 開發時網址形如 `.../tickers?type=EQUITY&exchange=TWSE`（同源 + Vite proxy）。
  */
 export async function getStockListFromFugle(): Promise<TaiwanStockListItem[]> {
   const dateKey = toYmdTaipei(new Date())
@@ -89,7 +89,7 @@ export async function getStockListFromFugle(): Promise<TaiwanStockListItem[]> {
 
   try {
     const { data } = await getFugleClient().get<unknown>(FUGLE_PATH, {
-      params: { type: 'EQUITY', exchange: 'TWSE', date: dateKey },
+      params: { type: 'EQUITY', exchange: 'TWSE' },
     })
     const rows = mapToStockListItems(assertFugleTickers(data))
     listCache = { rows, fetchedAt: Date.now(), dateKey }
