@@ -41,7 +41,7 @@ onMounted(async () => {
         <ul v-else class="flex flex-wrap gap-2">
           <li v-for="it in hotItems" :key="it.symbol">
             <RouterLink
-              :to="{ name: 'stockPrice', params: { id: it.symbol }, query: { name: it.name } }"
+              :to="{ name: 'stockPrice', params: { id: it.symbol } }"
               class="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-900 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-50 dark:hover:bg-slate-700"
             >
               {{ it.name }}（{{ it.symbol }}）
@@ -59,7 +59,7 @@ onMounted(async () => {
         <ul v-else class="flex flex-wrap gap-2">
           <li v-for="it in changeUpItems" :key="it.symbol">
             <RouterLink
-              :to="{ name: 'stockPrice', params: { id: it.symbol }, query: { name: it.name } }"
+              :to="{ name: 'stockPrice', params: { id: it.symbol } }"
               class="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-900 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-50 dark:hover:bg-slate-700"
             >
               {{ it.name }}（{{ it.symbol }}）

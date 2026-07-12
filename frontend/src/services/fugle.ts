@@ -20,8 +20,19 @@ export type FugleIntradayTickersResponse = {
   data: FugleIntradayTickerRow[]
 }
 
+export type FugleIntradayTickerResponse = {
+  date: string
+  type: string
+  exchange: string
+  market?: string
+  symbol: string
+  name?: string
+  industry?: string
+}
+
 /** 後端 `/fugle` 代理至 Fugle；金鑰僅在伺服器 `FUGLE_API_KEY`，前端零 secret。 */
 const FUGLE_PATH = '/marketdata/v1.0/stock/intraday/tickers'
+const FUGLE_TICKER_PATH = '/marketdata/v1.0/stock/intraday/ticker'
 const FUGLE_BASE = '/fugle'
 
 let fugleClient: AxiosInstance | null = null
@@ -46,6 +57,17 @@ function assertFugleTickers(body: unknown): FugleIntradayTickersResponse {
   const b = body as FugleIntradayTickersResponse
   if (!Array.isArray(b.data)) {
     throw new ApiError('Fugle tickers: missing data array', { status: 0, payload: body })
+  }
+  return b
+}
+
+function assertFugleTicker(body: unknown): FugleIntradayTickerResponse {
+  if (!body || typeof body !== 'object') {
+    throw new ApiError('Fugle ticker: empty response', { status: 0, payload: body })
+  }
+  const b = body as FugleIntradayTickerResponse
+  if (!b.symbol) {
+    throw new ApiError('Fugle ticker: missing symbol', { status: 0, payload: body })
   }
   return b
 }
@@ -77,8 +99,8 @@ let listCache: { rows: TaiwanStockListItem[]; fetchedAt: number; dateKey: string
 const LIST_TTL_MS = 60_000
 
 /**
- * 股票總覽：只呼叫一次 Fugle intraday tickers，query 帶 `type=EQUITY` 與 `exchange=TWSE`。
- * 開發時網址形如 `.../tickers?type=EQUITY&exchange=TWSE`（同源 + Vite proxy）。
+ * 股票總覽：只呼叫一次 Fugle intraday tickers，query 帶 `type=EQUITY`、`exchange=TWSE` 與 `isNormal=true`。
+ * 開發時網址形如 `.../tickers?type=EQUITY&exchange=TWSE&isNormal=true`（同源 + Vite proxy）。
  */
 export async function getStockListFromFugle(): Promise<TaiwanStockListItem[]> {
   const dateKey = toYmdTaipei(new Date())
@@ -89,7 +111,7 @@ export async function getStockListFromFugle(): Promise<TaiwanStockListItem[]> {
 
   try {
     const { data } = await getFugleClient().get<unknown>(FUGLE_PATH, {
-      params: { type: 'EQUITY', exchange: 'TWSE' },
+      params: { type: 'EQUITY', exchange: 'TWSE', isNormal: true },
     })
     const rows = mapToStockListItems(assertFugleTickers(data))
     listCache = { rows, fetchedAt: Date.now(), dateKey }
@@ -98,6 +120,18 @@ export async function getStockListFromFugle(): Promise<TaiwanStockListItem[]> {
       console.info(`[Fugle] intraday/tickers date=${dateKey} → ${rows.length} 檔（1 個交易日）`)
     }
     return rows
+  } catch (e) {
+    throw normalizeAxiosError(e)
+  }
+}
+
+export async function getIntradayTickerFromFugle(symbol: string): Promise<FugleIntradayTickerResponse> {
+  const s = symbol.trim()
+  if (!s) throw new ApiError('Fugle ticker: missing symbol', { status: 0 })
+
+  try {
+    const { data } = await getFugleClient().get<unknown>(`${FUGLE_TICKER_PATH}/${encodeURIComponent(s)}`)
+    return assertFugleTicker(data)
   } catch (e) {
     throw normalizeAxiosError(e)
   }

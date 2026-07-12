@@ -52,8 +52,7 @@ onMounted(() => {
 })
 
 function goPrice(stockId: string) {
-  const row = list.value.find((r) => r.stockId === stockId)
-  void router.push({ name: 'stockPrice', params: { id: stockId }, query: row?.stockName ? { name: row.stockName } : {} })
+  void router.push({ name: 'stockPrice', params: { id: stockId } })
 }
 </script>
 

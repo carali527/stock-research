@@ -5,7 +5,7 @@ import prettier from 'eslint-config-prettier'
 import globals from 'globals'
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'node_modules/**'] },
+  { ignores: ['dist/**', 'node_modules/**', '.vite/**', 'playwright-report/**', 'test-results/**'] },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   ...pluginVue.configs['flat/recommended'],
@@ -30,7 +30,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['vite.config.ts', 'eslint.config.js'],
+    files: ['vite.config.ts', 'eslint.config.js', 'playwright.config.ts', 'e2e/**/*.ts'],
     languageOptions: {
       globals: globals.node,
     },

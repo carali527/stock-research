@@ -7,7 +7,7 @@ import CandlestickChart from '@/components/CandlestickChart.vue'
 import VirtualStockPriceList from '@/components/VirtualStockPriceList.vue'
 import { ApiError } from '@/services/errors'
 import { useFugleStockStreaming } from '@/composables/useFugleStockStreaming'
-import { getHistoricalCandlesFromFugle } from '@/services/fugle'
+import { getHistoricalCandlesFromFugle, getIntradayTickerFromFugle } from '@/services/fugle'
 import { useStockStore } from '@/stores/stockStore'
 
 const route = useRoute()
@@ -15,14 +15,19 @@ const router = useRouter()
 
 const stockId = computed(() => String(route.params.id ?? '').trim())
 const stockStore = useStockStore()
-const stockNameFromQuery = computed(() => String(route.query.name ?? '').trim())
-const stockName = computed(() => stockNameFromQuery.value || stockStore.getName(stockId.value))
+const stockName = computed(() => stockStore.getName(stockId.value))
 const isFavorite = computed(() => stockStore.isFavorite(stockId.value))
 
 watch(
-  [stockId, stockNameFromQuery],
-  ([id, name]) => {
-    if (id && name) stockStore.setName(id, name)
+  stockId,
+  async (id) => {
+    if (!id || stockStore.getName(id)) return
+    try {
+      const ticker = await getIntradayTickerFromFugle(id)
+      if (ticker.name) stockStore.setName(id, ticker.name)
+    } catch {
+      /* 名稱查詢失敗不影響價格頁 */
+    }
   },
   { immediate: true },
 )
