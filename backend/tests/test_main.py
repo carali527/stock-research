@@ -15,6 +15,24 @@ def test_health_returns_ok():
     assert response.json() == {"status": "ok"}
 
 
+def test_robots_txt_points_to_dynamic_sitemap():
+    response = client.get("/robots.txt", headers={"host": "example.test", "x-forwarded-proto": "https"})
+
+    assert response.status_code == 200
+    assert "Disallow: /favorites" in response.text
+    assert "Sitemap: https://example.test/sitemap.xml" in response.text
+
+
+def test_sitemap_xml_lists_public_pages():
+    response = client.get("/sitemap.xml", headers={"host": "example.test", "x-forwarded-proto": "https"})
+
+    assert response.status_code == 200
+    assert "<loc>https://example.test/</loc>" in response.text
+    assert "<loc>https://example.test/stock/demo</loc>" in response.text
+    assert "<loc>https://example.test/research</loc>" in response.text
+    assert "/favorites" not in response.text
+
+
 def test_yahoo_quote_returns_normalized_payload(monkeypatch):
     def fake_fetch_quote(symbol: str):
         return SimpleNamespace(

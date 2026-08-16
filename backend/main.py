@@ -693,7 +693,52 @@ _NON_SPA_PREFIXES: tuple[str, ...] = (
     "ws/",
     "health",
     "assets/",
+    "robots.txt",
+    "sitemap.xml",
 )
+
+
+def _public_origin(request: Request) -> str:
+    proto = (request.headers.get("x-forwarded-proto") or request.url.scheme or "https").split(",", 1)[0].strip()
+    host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc).split(",", 1)[0].strip()
+    return f"{proto}://{host}".rstrip("/")
+
+
+@app.get("/robots.txt", include_in_schema=False)
+def robots_txt(request: Request) -> Response:
+    origin = _public_origin(request)
+    body = "\n".join(
+        [
+            "User-agent: *",
+            "Allow: /",
+            "Disallow: /favorites",
+            f"Sitemap: {origin}/sitemap.xml",
+            "",
+        ]
+    )
+    return Response(content=body, media_type="text/plain; charset=utf-8")
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+def sitemap_xml(request: Request) -> Response:
+    origin = _public_origin(request)
+    today = _taipei_date_key()
+    paths = [
+        ("/", "daily", "0.9"),
+        ("/stock/demo", "weekly", "0.6"),
+        ("/research", "weekly", "0.6"),
+    ]
+    urls = "\n".join(
+        f"  <url><loc>{origin}{path}</loc><lastmod>{today}</lastmod><changefreq>{freq}</changefreq><priority>{priority}</priority></url>"
+        for path, freq, priority in paths
+    )
+    body = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{urls}\n"
+        "</urlset>\n"
+    )
+    return Response(content=body, media_type="application/xml; charset=utf-8")
 
 
 @app.get("/{full_path:path}", include_in_schema=False)
