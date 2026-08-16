@@ -10,6 +10,7 @@ import { useFugleStockStreaming } from '@/composables/useFugleStockStreaming'
 import { useRealtimeOwnership } from '@/composables/useRealtimeOwnership'
 import { getHistoricalCandlesFromFugle, getIntradayTickerFromFugle } from '@/services/fugle'
 import { useStockStore } from '@/stores/stockStore'
+import { isTaiwanMarketOpen } from '@/utils/marketHours'
 
 const route = useRoute()
 const router = useRouter()
@@ -36,7 +37,9 @@ watch(
 type StockTab = 'realtime' | 'kline'
 const activeTab = ref<StockTab>('realtime')
 
-const wantsRealtimeStream = computed(() => activeTab.value === 'realtime')
+const marketClock = ref(Date.now())
+const isMarketOpenNow = computed(() => isTaiwanMarketOpen(new Date(marketClock.value)))
+const wantsRealtimeStream = computed(() => activeTab.value === 'realtime' && isMarketOpenNow.value)
 const { canStream: wsEnabled, hasOtherOwner: hasRealtimeOwnerInOtherTab } = useRealtimeOwnership(wantsRealtimeStream)
 
 const {
@@ -50,6 +53,7 @@ const {
 const tradeLine = ref<Array<{ time: number; value: number }>>([])
 
 const fugleStreamLabel = computed(() => {
+  if (activeTab.value === 'realtime' && !isMarketOpenNow.value) return '暫停連線'
   switch (fugleStreamStatus.value) {
     case 'idle':
       return '未連線'
@@ -115,26 +119,6 @@ const klineMinuteTimeframe = ref<IntradayTimeframe>(1)
 const timeframeLabel = computed(() => {
   return activeTab.value === 'kline' && resolution.value === 'minute' ? klineMinuteTimeframe.value : intradayTimeframe.value
 })
-
-function isTaiwanMarketOpenNow(): boolean {
-  // 簡化判斷：週一～週五，台北 09:00–13:35 視為開市（不處理例假日/颱風停市）
-  const now = new Date()
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Taipei',
-    weekday: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(now)
-  const weekday = parts.find((p) => p.type === 'weekday')?.value ?? ''
-  const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? NaN)
-  const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? NaN)
-  const dow = weekday.toLowerCase()
-  const isWeekday = dow.startsWith('mon') || dow.startsWith('tue') || dow.startsWith('wed') || dow.startsWith('thu') || dow.startsWith('fri')
-  if (!isWeekday) return false
-  const hm = hour * 60 + minute
-  return hm >= 9 * 60 && hm <= 13 * 60 + 35
-}
 
 function addDays(base: Date, days: number) {
   const d = new Date(base)
@@ -510,6 +494,7 @@ async function loadFugleHistoricalKline(signal?: AbortSignal) {
 let loadGeneration = 0
 let loadAbort: AbortController | null = null
 let realtimeFallbackKey = ''
+let marketClockTimer: number | null = null
 
 async function load(): Promise<boolean> {
   if (!stockId.value) return false
@@ -523,7 +508,7 @@ async function load(): Promise<boolean> {
   // - 開市：只用 WebSocket
   // - 休市：用 REST 補一份可畫的分 K（否則 WS snapshot 可能只有幾根）
   if (activeTab.value === 'realtime') {
-    if (isTaiwanMarketOpenNow()) {
+    if (isMarketOpenNow.value) {
       loading.value = false
       return true
     }
@@ -559,6 +544,7 @@ async function load(): Promise<boolean> {
         })
         .filter(Boolean) as Array<{ date: string; timeSec: number; open: number; high: number; low: number; close: number; volume: number }>
       intradayCandles.value = mapped
+      tradeLine.value = mapped.map((c) => ({ time: c.timeSec, value: c.close })).slice(-1200)
       dailyRows.value = res.data
         .map((c) => ({
           date: isoToYmd(c.date),
@@ -719,7 +705,7 @@ watch(
 
 /** 頁籤／分 K／日週月週期／代碼：同一輪只觸發一次 load；含 resolution 避免只改日週月時漏載 */
 watch(
-  [activeTab, intradayTimeframe, stockId, resolution, klineMinuteTimeframe, klineRangeEnd],
+  [activeTab, intradayTimeframe, stockId, resolution, klineMinuteTimeframe, klineRangeEnd, isMarketOpenNow],
   ([t, , sid], old) => {
     if (old) {
       const [, , prevSid] = old
@@ -752,10 +738,17 @@ onMounted(() => {
     klineRangeStart.value = deriveStartYmdFromEndYmd(klineRangeEnd.value)
   }
   document.addEventListener('pointerdown', onDocPointerDown, true)
+  marketClockTimer = window.setInterval(() => {
+    marketClock.value = Date.now()
+  }, 60_000)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onDocPointerDown, true)
+  if (marketClockTimer != null) {
+    window.clearInterval(marketClockTimer)
+    marketClockTimer = null
+  }
 })
 </script>
 
