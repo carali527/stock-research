@@ -7,6 +7,7 @@ import CandlestickChart from '@/components/CandlestickChart.vue'
 import VirtualStockPriceList from '@/components/VirtualStockPriceList.vue'
 import { ApiError } from '@/services/errors'
 import { useFugleStockStreaming } from '@/composables/useFugleStockStreaming'
+import { useRealtimeOwnership } from '@/composables/useRealtimeOwnership'
 import { getHistoricalCandlesFromFugle, getIntradayTickerFromFugle } from '@/services/fugle'
 import { useStockStore } from '@/stores/stockStore'
 
@@ -35,7 +36,8 @@ watch(
 type StockTab = 'realtime' | 'kline'
 const activeTab = ref<StockTab>('realtime')
 
-const wsEnabled = computed(() => activeTab.value === 'realtime')
+const wantsRealtimeStream = computed(() => activeTab.value === 'realtime')
+const { canStream: wsEnabled, hasOtherOwner: hasRealtimeOwnerInOtherTab } = useRealtimeOwnership(wantsRealtimeStream)
 
 const {
   status: fugleStreamStatus,
@@ -1005,6 +1007,9 @@ onBeforeUnmount(() => {
             </div>
             <p v-if="fugleStreamError" class="mt-1 text-sm text-red-700 dark:text-red-300">
               {{ fugleStreamError }}
+            </p>
+            <p v-else-if="hasRealtimeOwnerInOtherTab" class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              即時行情正在其他分頁更新，此分頁暫停同步。
             </p>
           </div>
 
