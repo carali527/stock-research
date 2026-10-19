@@ -68,7 +68,7 @@ export function useFugleStockStreaming(symbol: MaybeRefOrGetter<string>, enabled
   let lastMessageAt = 0
 
   const HEARTBEAT_CHECK_MS = 5_000
-  const HEARTBEAT_TIMEOUT_MS = 25_000
+  const HEARTBEAT_TIMEOUT_MS = 35_000
   const BACKOFF_BASE_MS = 500
   const BACKOFF_CAP_MS = 30_000
 
