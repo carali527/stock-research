@@ -152,4 +152,44 @@ describe('useRealtimeOwnership', () => {
 
     stopScopes([first.scope])
   })
+  it('resumes the suspended previous leader after the new leader closes', () => {
+    const first = createOwnershipScope()
+    vi.advanceTimersByTime(200)
+    const second = createOwnershipScope()
+    vi.advanceTimersByTime(200)
+    expect(first.state.isSuspended.value).toBe(true)
+
+    second.scope.stop()
+    vi.advanceTimersByTime(200)
+    expect(first.state.canStream.value).toBe(true)
+    expect(first.state.isSuspended.value).toBe(false)
+    first.scope.stop()
+  })
+
+  it('resumes after the leader disappears without sending a release', () => {
+    const first = createOwnershipScope()
+    vi.advanceTimersByTime(200)
+    const channel = new FakeBroadcastChannel('stock-research:realtime-leader')
+    channel.postMessage({
+      type: 'leader-announcement', instanceId: 'other-tab',
+      term: { counter: 99, ownerId: 'other-tab' },
+    })
+    channel.close()
+    vi.advanceTimersByTime(2999)
+    expect(first.state.canStream.value).toBe(false)
+    vi.advanceTimersByTime(201)
+    expect(first.state.canStream.value).toBe(true)
+    first.scope.stop()
+  })
+
+  it('does not take over while the other leader keeps sending heartbeats', () => {
+    const first = createOwnershipScope()
+    vi.advanceTimersByTime(200)
+    const second = createOwnershipScope()
+    vi.advanceTimersByTime(10_000)
+    expect(first.state.canStream.value).toBe(false)
+    expect(second.state.canStream.value).toBe(true)
+    stopScopes([second.scope, first.scope])
+  })
+
 })

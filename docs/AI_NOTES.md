@@ -44,3 +44,10 @@
 - Keep Fugle market data access server-side.
 - Keep Gemini analysis streaming behavior stable unless intentionally changing AI UX.
 - Prefer user-facing error messages in Chinese where the existing UI already uses Chinese.
+
+## Persistent Fugle streaming
+- Each backend process opens one Fugle WebSocket at startup (when `FUGLE_API_KEY` is set), independent of trading hours.
+- Optional `FUGLE_STREAM_SYMBOLS=2330,2317` pre-subscribes candles on startup. Without it, the connection waits for stock-page subscriptions; no stock list is assumed.
+- Stock pages share this connection. Requested candle subscriptions remain until backend restart, including after browsers leave. Size the startup list and requested symbols within the Fugle plan's subscription limit.
+- Transient failures retry with exponential backoff (2–60 seconds plus up to 1 second jitter); successful connections lasting 120 seconds reset the backoff. Authentication/plan errors stop automatic upstream retries until restart/configuration correction.
+- Every process/Cloud Run instance has its own connection and subscriptions. Keeping an instance alive and providing CPU outside requests requires appropriate Cloud Run settings; this change does not alter deployment settings or guarantee a continuously running instance.

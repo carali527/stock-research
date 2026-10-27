@@ -106,7 +106,16 @@ def _configure_stderr_info_loggers() -> None:
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
     _configure_stderr_info_loggers()
-    yield
+    from fugle_market_fetch import FUGLE_KEY
+    from fugle_streaming import FugleStreaming
+
+    symbols = [s.strip() for s in os.getenv("FUGLE_STREAM_SYMBOLS", "").split(",") if s.strip()]
+    _app.state.fugle_streaming = FugleStreaming(FUGLE_KEY, symbols)
+    await _app.state.fugle_streaming.start()
+    try:
+        yield
+    finally:
+        await _app.state.fugle_streaming.stop()
 
 
 app = FastAPI(title="stock-research-backend", version="0.1.0", lifespan=_lifespan)
@@ -187,58 +196,46 @@ async def fugle_http_proxy(path: str, request: Request) -> Response:
 
 @app.websocket("/ws/fugle/streaming")
 async def fugle_streaming_ws_proxy(websocket: WebSocket) -> None:
-    """瀏覽器連同源 WS，後端用 `FUGLE_API_KEY` 連 Fugle 並雙向轉發（不再把 key 放前端 bundle）。"""
-    from fugle_market_fetch import FUGLE_KEY
-
-    if not FUGLE_KEY:
+    """Attach browsers to the process-wide upstream; credentials remain server-side."""
+    stream = websocket.app.state.fugle_streaming
+    if not stream.api_key:
         await websocket.close(code=1011)
         return
-
     await websocket.accept()
+    queue = asyncio.Queue(maxsize=256)
+    stream.clients[queue] = None
+    await websocket.send_json(stream.error or {"event": "authenticated" if stream.authenticated else "reconnecting"})
 
-    import websockets
-    from websockets.exceptions import ConnectionClosed
-
-    ws_url = "wss://api.fugle.tw/marketdata/v1.0/stock/streaming"
-
-    async def pump_upstream_to_browser(upstream: Any) -> None:
-        async for message in upstream:
-            if isinstance(message, bytes):
-                message = message.decode("utf-8", errors="replace")
-            await websocket.send_text(message)
-
-    async def pump_browser_to_upstream(upstream: Any) -> None:
+    async def receive():
         while True:
-            try:
-                text = await websocket.receive_text()
-            except WebSocketDisconnect:
-                break
-            try:
-                parsed = json.loads(text)
-                if isinstance(parsed, dict) and str(parsed.get("event", "")).strip().lower() == "auth":
+            message = await websocket.receive_json()
+            data = message.get("data", {})
+            if message.get("event") == "subscribe":
+                symbol = data.get("symbol")
+                if data.get("channel") != "candles" or not isinstance(symbol, str) or not symbol.strip():
+                    await queue.put({"event": "error", "data": {"message": "請提供有效的股票代碼與 candles 頻道"}})
                     continue
-            except json.JSONDecodeError:
-                pass
-            await upstream.send(text)
+                await stream.subscribe(queue, symbol.strip())
 
+    async def send():
+        while True:
+            message = await queue.get()
+            if message is None:
+                return
+            await websocket.send_json(message)
+
+    tasks = [asyncio.create_task(receive()), asyncio.create_task(send())]
     try:
-        async with websockets.connect(ws_url, max_size=None, open_timeout=30) as upstream:
-            await upstream.send(json.dumps({"event": "auth", "data": {"apikey": FUGLE_KEY}}))
-            t1 = asyncio.create_task(pump_upstream_to_browser(upstream))
-            t2 = asyncio.create_task(pump_browser_to_upstream(upstream))
-            done, pending = await asyncio.wait((t1, t2), return_when=asyncio.FIRST_COMPLETED)
-            for task in pending:
-                task.cancel()
-            for task in pending:
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-    except ConnectionClosed:
+        done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        for task in done:
+            task.result()
+    except (WebSocketDisconnect, RuntimeError):
         pass
-    except Exception as e:
-        logger.warning("fugle streaming proxy failed: %s", e)
     finally:
+        stream.clients.pop(queue, None)
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
         try:
             await websocket.close()
         except Exception:

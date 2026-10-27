@@ -46,7 +46,7 @@ function normalizeFugleSymbol(raw: string): string {
 }
 
 /**
- * 進入個股頁時建立 Fugle 即時行情 WebSocket：連線後送 `auth`，成功後訂閱 `candles`（1 分 K）。
+ * 進入個股頁時建立 Fugle 即時行情 WebSocket：後端驗證成功後訂閱 `candles`（1 分 K）。
  * 離開頁面或股票代碼變更時關閉連線。
  */
 export function useFugleStockStreaming(symbol: MaybeRefOrGetter<string>, enabled: MaybeRefOrGetter<boolean> = true) {
@@ -68,7 +68,7 @@ export function useFugleStockStreaming(symbol: MaybeRefOrGetter<string>, enabled
   let lastMessageAt = 0
 
   const HEARTBEAT_CHECK_MS = 5_000
-  const HEARTBEAT_TIMEOUT_MS = 25_000
+  const HEARTBEAT_TIMEOUT_MS = 35_000
   const BACKOFF_BASE_MS = 500
   const BACKOFF_CAP_MS = 30_000
 
@@ -195,6 +195,12 @@ export function useFugleStockStreaming(symbol: MaybeRefOrGetter<string>, enabled
       }
 
       const event = msg.event
+      if (event === 'reconnecting') {
+        status.value = 'connecting'
+        clearHeartbeatTimer()
+        return
+      }
+
       if (event === 'authenticated') {
         status.value = 'authenticated'
         subscribedSymbol = pendingSymbol
@@ -208,6 +214,7 @@ export function useFugleStockStreaming(symbol: MaybeRefOrGetter<string>, enabled
       }
 
       if (event === 'error') {
+        clearHeartbeatTimer()
         const d = msg.data as { message?: string } | undefined
         errorMessage.value = sanitizeWsServiceMessage(d?.message)
         status.value = 'error'
@@ -322,9 +329,8 @@ export function useFugleStockStreaming(symbol: MaybeRefOrGetter<string>, enabled
     const on = Boolean(toValue(enabled))
     const sym = normalizeFugleSymbol(toValue(symbol))
     if (!on || !sym) return
-    if (status.value === 'authenticated') return
-    retryCount = 0
-    void connect(sym)
+    if (ws || reconnectTimer != null) return
+    scheduleReconnect('online', sym)
   }
 
   function onVisibilityChange() {

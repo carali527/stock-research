@@ -127,6 +127,9 @@ export function useRealtimeOwnership(enabled: MaybeRefOrGetter<boolean>) {
     clearStaleTimer()
     staleTimer = window.setTimeout(() => {
       staleTimer = null
+      // A previously yielded tab may take over once the current leader is gone.
+      isSuspended.value = false
+      leaderTerm.value = null
       if (isVisible()) scheduleClaim()
     }, STALE_MS)
   }
@@ -219,8 +222,11 @@ export function useRealtimeOwnership(enabled: MaybeRefOrGetter<boolean>) {
     }
 
     if (message.type === 'leader-release') {
-      if (message.term) rememberTerm(message.term)
+      // Delayed releases from an older owner must not interrupt the current leader.
+      if (!message.term || !knownLeaderTerm || compareLeaderTerm(message.term, knownLeaderTerm) !== 0) return
       lastHeartbeatAt = null
+      isSuspended.value = false
+      leaderTerm.value = null
       if (isVisible()) scheduleClaim()
       return
     }
